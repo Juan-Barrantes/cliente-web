@@ -1,0 +1,806 @@
+
+GUÍA FRONTEND REACT PARA GESTIONAR CLIENTES
+===========================================
+
+Objetivo
+--------
+Construir un frontend en React para consumir el backend `cliente-service` y gestionar clientes con estas pantallas:
+
+1. Listar clientes
+2. Crear cliente
+3. Editar cliente
+4. Eliminar cliente
+5. Buscar cliente por documento
+
+El frontend consumirá endpoints como:
+- GET    /clientes
+- GET    /clientes/{id}
+- GET    /clientes/documento/{numeroDocumento}
+- POST   /clientes
+- PUT    /clientes/{id}
+- DELETE /clientes/{id}
+
+Requisitos previos
+------------------
+1. Tener instalado Node.js LTS
+2. Tener corriendo el backend Spring Boot en:
+   http://localhost:8081
+3. Haber agregado CORS en tu backend, por ejemplo:
+
+   @CrossOrigin(origins = "*")
+
+Arquitectura sencilla del frontend
+----------------------------------
+Usaremos una app React simple con esta estructura:
+
+cliente-web/
+├── src/
+│   ├── api/
+│   │   └── clienteApi.js
+│   ├── components/
+│   │   ├── ClienteForm.jsx
+│   │   ├── ClienteList.jsx
+│   │   └── BusquedaDocumento.jsx
+│   ├── pages/
+│   │   └── ClientePage.jsx
+│   ├── App.jsx
+│   ├── main.jsx
+│   └── styles.css
+└── package.json
+
+Recomendación
+-------------
+Para arrancar rápido, usaremos:
+- React + Vite
+- Fetch API nativo
+- CSS simple
+- Todo el flujo de clientes en una sola página
+
+==================================================
+FASE 1. CREAR EL PROYECTO REACT
+==================================================
+
+Paso 1: crear el proyecto
+-------------------------
+Ejecuta en terminal:
+
+npm create vite@latest cliente-web -- --template react
+cd cliente-web
+npm install
+
+Paso 2: ejecutar el proyecto
+----------------------------
+npm run dev
+
+Esto levantará el frontend en una URL como:
+http://localhost:5173
+
+==================================================
+FASE 2. CREAR LA ESTRUCTURA DEL PROYECTO
+==================================================
+
+Dentro de src crea estas carpetas y archivos:
+
+src/
+  api/
+    clienteApi.js
+  components/
+    ClienteForm.jsx
+    ClienteList.jsx
+    BusquedaDocumento.jsx
+  pages/
+    ClientePage.jsx
+  App.jsx
+  main.jsx
+  styles.css
+
+==================================================
+FASE 3. CÓDIGO DEL PROYECTO
+==================================================
+
+1) src/api/clienteApi.js
+------------------------
+Qué hace:
+- Centraliza todas las llamadas HTTP al backend
+- Evita repetir URLs en varios componentes
+- Hace más fácil cambiar la ruta base más adelante
+
+Código:
+
+const BASE_URL = "http://localhost:8081/clientes";
+
+// Obtiene todos los clientes
+export async function obtenerClientes() {
+  const response = await fetch(BASE_URL);
+  if (!response.ok) {
+    throw new Error("Error al obtener clientes");
+  }
+  return response.json();
+}
+
+// Obtiene un cliente por ID
+export async function obtenerClientePorId(id) {
+  const response = await fetch(`${BASE_URL}/${id}`);
+  if (!response.ok) {
+    throw new Error("Cliente no encontrado");
+  }
+  return response.json();
+}
+
+
+
+// Busca cliente por número de documento
+export async function buscarClientePorDocumento(numeroDocumento) {
+  const response = await fetch(`${BASE_URL}/documento/${numeroDocumento}`);
+  if (!response.ok) {
+    throw new Error("Cliente no encontrado por documento");
+  }
+  return response.json();
+}
+
+// Crea un nuevo cliente
+export async function crearCliente(cliente) {
+  const response = await fetch(BASE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(cliente),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Error al crear cliente");
+  }
+
+  return response.json();
+}
+
+// Actualiza un cliente existente
+export async function actualizarCliente(id, cliente) {
+  const response = await fetch(`${BASE_URL}/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(cliente),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Error al actualizar cliente");
+  }
+
+  return response.json();
+}
+
+// Elimina un cliente
+export async function eliminarCliente(id) {
+  const response = await fetch(`${BASE_URL}/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error("Error al eliminar cliente");
+  }
+}
+
+--------------------------------------------------
+
+2) src/components/ClienteForm.jsx
+---------------------------------
+Qué hace:
+- Muestra el formulario para crear o editar clientes
+- Recibe un cliente inicial cuando se quiere editar
+- Envía el formulario al componente padre
+
+Código:
+
+import { useEffect, useState } from "react";
+
+const clienteVacio = {
+  tipoDocumento: "DNI",
+  numeroDocumento: "",
+  nombres: "",
+  apellidos: "",
+  correo: "",
+  telefono: "",
+  fechaNacimiento: "",
+  ingresoMensual: "",
+  scoreRiesgo: "",
+};
+
+function ClienteForm({ onSubmit, clienteSeleccionado, onCancel }) {
+  const [formData, setFormData] = useState(clienteVacio);
+
+  // Si llega un cliente seleccionado, llenamos el formulario para edición
+  useEffect(() => {
+    if (clienteSeleccionado) {
+      setFormData({
+        tipoDocumento: clienteSeleccionado.tipoDocumento || "DNI",
+        numeroDocumento: clienteSeleccionado.numeroDocumento || "",
+        nombres: clienteSeleccionado.nombres || "",
+        apellidos: clienteSeleccionado.apellidos || "",
+        correo: clienteSeleccionado.correo || "",
+        telefono: clienteSeleccionado.telefono || "",
+        fechaNacimiento: clienteSeleccionado.fechaNacimiento || "",
+        ingresoMensual: clienteSeleccionado.ingresoMensual || "",
+        scoreRiesgo: clienteSeleccionado.scoreRiesgo || "",
+      });
+    } else {
+      setFormData(clienteVacio);
+    }
+  }, [clienteSeleccionado]);
+
+  // Actualiza un campo del formulario
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Envía la data al padre
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    const payload = {
+      ...formData,
+      ingresoMensual: Number(formData.ingresoMensual),
+      scoreRiesgo: Number(formData.scoreRiesgo),
+    };
+
+    onSubmit(payload);
+
+    if (!clienteSeleccionado) {
+      setFormData(clienteVacio);
+    }
+  };
+
+  return (
+    <form className="card form" onSubmit={handleSubmit}>
+      <h2>{clienteSeleccionado ? "Editar cliente" : "Registrar cliente"}</h2>
+
+      <div className="grid">
+        <label>
+          Tipo documento
+          <select name="tipoDocumento" value={formData.tipoDocumento} onChange={handleChange}>
+            <option value="DNI">DNI</option>
+            <option value="CE">CE</option>
+            <option value="PAS">PAS</option>
+          </select>
+        </label>
+
+        <label>
+          Número documento
+          <input
+            name="numeroDocumento"
+            value={formData.numeroDocumento}
+            onChange={handleChange}
+            required
+          />
+        </label>
+
+        <label>
+          Nombres
+          <input name="nombres" value={formData.nombres} onChange={handleChange} required />
+        </label>
+
+        <label>
+          Apellidos
+          <input name="apellidos" value={formData.apellidos} onChange={handleChange} required />
+        </label>
+
+        <label>
+          Correo
+          <input name="correo" type="email" value={formData.correo} onChange={handleChange} />
+        </label>
+
+        <label>
+          Teléfono
+          <input name="telefono" value={formData.telefono} onChange={handleChange} />
+        </label>
+
+        <label>
+          Fecha nacimiento
+          <input
+            name="fechaNacimiento"
+            type="date"
+            value={formData.fechaNacimiento}
+            onChange={handleChange}
+          />
+        </label>
+
+        <label>
+          Ingreso mensual
+          <input
+            name="ingresoMensual"
+            type="number"
+            step="0.01"
+            value={formData.ingresoMensual}
+            onChange={handleChange}
+            required
+          />
+        </label>
+
+        <label>
+          Score riesgo
+          <input
+            name="scoreRiesgo"
+            type="number"
+            value={formData.scoreRiesgo}
+            onChange={handleChange}
+            required
+          />
+        </label>
+      </div>
+
+      <div className="actions">
+        <button type="submit">
+          {clienteSeleccionado ? "Actualizar" : "Guardar"}
+        </button>
+
+        {clienteSeleccionado && (
+          <button type="button" className="secondary" onClick={onCancel}>
+            Cancelar edición
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
+export default ClienteForm;
+
+--------------------------------------------------
+
+3) src/components/ClienteList.jsx
+---------------------------------
+Qué hace:
+- Muestra una tabla/listado de clientes
+- Permite editar o eliminar desde botones
+
+Código:
+
+function ClienteList({ clientes, onEditar, onEliminar }) {
+  return (
+    <div className="card">
+      <h2>Listado de clientes</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Documento</th>
+            <th>Nombre completo</th>
+            <th>Correo</th>
+            <th>Ingreso</th>
+            <th>Score</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {clientes.length === 0 ? (
+            <tr>
+              <td colSpan="7">No hay clientes registrados</td>
+            </tr>
+          ) : (
+            clientes.map((cliente) => (
+              <tr key={cliente.idCliente}>
+                <td>{cliente.idCliente}</td>
+                <td>{cliente.tipoDocumento} - {cliente.numeroDocumento}</td>
+                <td>{cliente.nombres} {cliente.apellidos}</td>
+                <td>{cliente.correo}</td>
+                <td>{cliente.ingresoMensual}</td>
+                <td>{cliente.scoreRiesgo}</td>
+                <td>
+                  <button onClick={() => onEditar(cliente)}>Editar</button>
+                  <button className="danger" onClick={() => onEliminar(cliente.idCliente)}>
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default ClienteList;
+
+--------------------------------------------------
+
+4) src/components/BusquedaDocumento.jsx
+---------------------------------------
+Qué hace:
+- Permite buscar un cliente por número de documento
+- Muestra el resultado en una caja simple
+
+Código:
+
+import { useState } from "react";
+
+function BusquedaDocumento({ onBuscar }) {
+  const [numeroDocumento, setNumeroDocumento] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onBuscar(numeroDocumento);
+  };
+
+  return (
+    <form className="card form-inline" onSubmit={handleSubmit}>
+      <h2>Buscar cliente por documento</h2>
+      <input
+        placeholder="Ingrese número de documento"
+        value={numeroDocumento}
+        onChange={(e) => setNumeroDocumento(e.target.value)}
+      />
+      <button type="submit">Buscar</button>
+    </form>
+  );
+}
+
+export default BusquedaDocumento;
+
+--------------------------------------------------
+
+5) src/pages/ClientePage.jsx
+----------------------------
+Qué hace:
+- Es la página principal del módulo clientes
+- Coordina formulario, tabla y búsqueda
+- Maneja estados de carga, edición y errores
+
+Código:
+
+import { useEffect, useState } from "react";
+import ClienteForm from "../components/ClienteForm";
+import ClienteList from "../components/ClienteList";
+import BusquedaDocumento from "../components/BusquedaDocumento";
+import {
+  obtenerClientes,
+  crearCliente,
+  actualizarCliente,
+  eliminarCliente,
+  buscarClientePorDocumento,
+} from "../api/clienteApi";
+
+function ClientePage() {
+  const [clientes, setClientes] = useState([]);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [clienteBuscado, setClienteBuscado] = useState(null);
+  const [mensaje, setMensaje] = useState("");
+  const [error, setError] = useState("");
+
+  // Carga inicial de clientes
+  const cargarClientes = async () => {
+    try {
+      const data = await obtenerClientes();
+      setClientes(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  useEffect(() => {
+    cargarClientes();
+  }, []);
+
+  // Crear o actualizar cliente
+  const handleGuardar = async (payload) => {
+    try {
+      setError("");
+      setMensaje("");
+
+      if (clienteSeleccionado) {
+        await actualizarCliente(clienteSeleccionado.idCliente, payload);
+        setMensaje("Cliente actualizado correctamente");
+      } else {
+        await crearCliente(payload);
+        setMensaje("Cliente creado correctamente");
+      }
+
+      setClienteSeleccionado(null);
+      await cargarClientes();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Eliminar cliente
+  const handleEliminar = async (id) => {
+    const confirmado = window.confirm("¿Seguro que deseas eliminar este cliente?");
+    if (!confirmado) return;
+
+    try {
+      setError("");
+      setMensaje("");
+      await eliminarCliente(id);
+      setMensaje("Cliente eliminado correctamente");
+      await cargarClientes();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Buscar cliente por documento
+  const handleBuscarDocumento = async (numeroDocumento) => {
+    try {
+      setError("");
+      setMensaje("");
+      const data = await buscarClientePorDocumento(numeroDocumento);
+      setClienteBuscado(data);
+    } catch (err) {
+      setClienteBuscado(null);
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="container">
+      <h1>Gestión de clientes - Banco</h1>
+
+      {mensaje && <div className="alert success">{mensaje}</div>}
+      {error && <div className="alert error">{error}</div>}
+
+      <ClienteForm
+        onSubmit={handleGuardar}
+        clienteSeleccionado={clienteSeleccionado}
+        onCancel={() => setClienteSeleccionado(null)}
+      />
+
+      <BusquedaDocumento onBuscar={handleBuscarDocumento} />
+
+      {clienteBuscado && (
+        <div className="card">
+          <h2>Resultado de búsqueda</h2>
+          <p><strong>ID:</strong> {clienteBuscado.idCliente}</p>
+          <p><strong>Nombre:</strong> {clienteBuscado.nombres} {clienteBuscado.apellidos}</p>
+          <p><strong>Documento:</strong> {clienteBuscado.tipoDocumento} - {clienteBuscado.numeroDocumento}</p>
+          <p><strong>Correo:</strong> {clienteBuscado.correo}</p>
+        </div>
+      )}
+
+      <ClienteList
+        clientes={clientes}
+        onEditar={setClienteSeleccionado}
+        onEliminar={handleEliminar}
+      />
+    </div>
+  );
+}
+
+export default ClientePage;
+
+--------------------------------------------------
+
+6) src/App.jsx
+--------------
+Qué hace:
+- Carga la pantalla principal del módulo cliente
+
+Código:
+
+import ClientePage from "./pages/ClientePage";
+import "./styles.css";
+
+function App() {
+  return <ClientePage />;
+}
+
+export default App;
+
+--------------------------------------------------
+
+7) src/main.jsx
+---------------
+Qué hace:
+- Punto de entrada de React
+- Renderiza la app en el div root
+
+Código:
+
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+--------------------------------------------------
+
+8) src/styles.css
+-----------------
+Qué hace:
+- Da un diseño sencillo, limpio y usable
+- Se puede mejorar luego, pero sirve para arrancar sólido
+
+Código:
+
+:root {
+  font-family: Arial, sans-serif;
+  color: #222;
+  background: #f4f6f9;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1, h2 {
+  margin-bottom: 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 600;
+}
+
+input, select, button {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: #1e66f5;
+  color: white;
+  font-weight: bold;
+}
+
+button.secondary {
+  background: #666;
+}
+
+button.danger {
+  background: #d72638;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.form-inline {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.alert {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.alert.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.alert.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 12px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+}
+
+==================================================
+FASE 4. CÓMO PROBAR EL FRONTEND
+==================================================
+
+1. Levanta el backend Spring Boot:
+   http://localhost:8081
+
+2. Levanta el frontend:
+   npm run dev
+
+3. Abre el navegador:
+   http://localhost:5173
+
+4. Prueba:
+   - Crear un cliente
+   - Editar un cliente
+   - Eliminar un cliente
+   - Buscar por documento
+
+==================================================
+FASE 5. RECOMENDACIONES DE MEJORA
+==================================================
+
+1. Agregar React Router si luego habrá varias pantallas:
+   - clientes
+   - préstamos
+   - productos
+   - cobranzas
+
+2. Separar formularios en modo create/edit más adelante
+
+3. Agregar confirmaciones visuales mejores que alert/confirm
+
+4. Agregar manejo de loading
+
+5. Agregar paginación desde backend y frontend
+
+6. Agregar tabla con filtros
+
+==================================================
+FASE 6. ERRORES COMUNES
+==================================================
+
+1. Error CORS
+   Solución:
+   agregar @CrossOrigin en el backend o configuración global CORS
+
+2. Error 404 al consumir API
+   Solución:
+   revisar puerto y ruta del backend
+
+3. Error de validación
+   Solución:
+   revisar que el payload coincida con ClienteRequest del backend
+
+4. Error de conexión
+   Solución:
+   confirmar que Spring Boot esté corriendo en localhost:8081
+
+==================================================
+FASE 7. SIGUIENTE EVOLUCIÓN
+==================================================
+
+Después de cerrar la gestión de clientes, el siguiente módulo ideal sería:
+
+- producto-service
+- prestamo-service
+- luego conectar el frontend React a varios módulos
+
+También puedes luego:
+- agregar Axios
+- usar hooks personalizados
+- agregar context API
+- usar componentes reutilizables
+
+Fin de la guía.
