@@ -1,22 +1,25 @@
 import { useState } from "react";
 
-function BusquedaDocumento({ onBuscar }) {
-  const [numeroDocumento, setNumeroDocumento] = useState("");
+function BusquedaDocumento({ onBuscar, disabled = false }) {
+  const [idCliente, setIdCliente] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onBuscar(numeroDocumento);
+    onBuscar(idCliente.trim());
   };
 
   return (
     <form className="card form-inline" onSubmit={handleSubmit}>
-      <h2>Buscar cliente por documento</h2>
+      <h2>Buscar cliente por ID</h2>
       <input
-        placeholder="Ingrese número de documento"
-        value={numeroDocumento}
-        onChange={(e) => setNumeroDocumento(e.target.value)}
+        placeholder="Ingrese ID del cliente"
+        value={idCliente}
+        onChange={(e) => setIdCliente(e.target.value)}
+        disabled={disabled}
       />
-      <button type="submit">Buscar</button>
+      <button type="submit" disabled={disabled}>
+        {disabled ? "Buscando..." : "Buscar"}
+      </button>
     </form>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ClienteForm from "../components/ClienteForm";
 import ClienteList from "../components/ClienteList";
 import BusquedaDocumento from "../components/BusquedaDocumento";
@@ -7,7 +7,7 @@ import {
   crearCliente,
   actualizarCliente,
   eliminarCliente,
-  buscarClientePorDocumento,
+  buscarClientePorId,
 } from "../clienteApi";
 
 function ClientePage() {
@@ -16,12 +16,22 @@ function ClientePage() {
   const [clienteBuscado, setClienteBuscado] = useState(null);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
+  const [cargandoClientes, setCargandoClientes] = useState(true);
+  const [guardandoCliente, setGuardandoCliente] = useState(false);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [eliminandoClienteId, setEliminandoClienteId] = useState(null);
+  const formularioRef = useRef(null);
 
   useEffect(() => {
     let activo = true;
 
     const cargarClientes = async () => {
       try {
+        if (activo) {
+          setCargandoClientes(true);
+          setError("");
+        }
+
         const data = await obtenerClientes();
         if (activo) {
           setClientes(data);
@@ -29,6 +39,10 @@ function ClientePage() {
       } catch (err) {
         if (activo) {
           setError(err.message);
+        }
+      } finally {
+        if (activo) {
+          setCargandoClientes(false);
         }
       }
     };
@@ -40,19 +54,34 @@ function ClientePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!clienteSeleccionado || !formularioRef.current) {
+      return;
+    }
+
+    formularioRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [clienteSeleccionado]);
+
   // Carga de clientes reutilizable fuera del efecto inicial
   const cargarClientes = async () => {
     try {
+      setCargandoClientes(true);
       const data = await obtenerClientes();
       setClientes(data);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setCargandoClientes(false);
     }
   };
 
   // Crear o actualizar cliente
   const handleGuardar = async (payload) => {
     try {
+      setGuardandoCliente(true);
       setError("");
       setMensaje("");
 
@@ -68,6 +97,8 @@ function ClientePage() {
       await cargarClientes();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setGuardandoCliente(false);
     }
   };
 
@@ -77,6 +108,7 @@ function ClientePage() {
     if (!confirmado) return;
 
     try {
+      setEliminandoClienteId(id);
       setError("");
       setMensaje("");
       await eliminarCliente(id);
@@ -84,20 +116,35 @@ function ClientePage() {
       await cargarClientes();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setEliminandoClienteId(null);
     }
   };
 
-  // Buscar cliente por documento
-  const handleBuscarDocumento = async (numeroDocumento) => {
+  // Buscar cliente por ID
+  const handleBuscarCliente = async (idCliente) => {
+    if (!idCliente.trim()) {
+      setClienteBuscado(null);
+      setError("Ingresa un ID de cliente para buscar");
+      return;
+    }
+
     try {
+      setBuscandoCliente(true);
       setError("");
       setMensaje("");
-      const data = await buscarClientePorDocumento(numeroDocumento);
+      const data = await buscarClientePorId(idCliente);
       setClienteBuscado(data);
     } catch (err) {
       setClienteBuscado(null);
       setError(err.message);
+    } finally {
+      setBuscandoCliente(false);
     }
+  };
+
+  const handleEditarCliente = (cliente) => {
+    setClienteSeleccionado(cliente);
   };
 
   return (
@@ -107,14 +154,17 @@ function ClientePage() {
       {mensaje && <div className="alert success">{mensaje}</div>}
       {error && <div className="alert error">{error}</div>}
 
-      <ClienteForm
-        key={clienteSeleccionado?.idCliente ?? "nuevo"}
-        onSubmit={handleGuardar}
-        clienteSeleccionado={clienteSeleccionado}
-        onCancel={() => setClienteSeleccionado(null)}
-      />
+      <div ref={formularioRef}>
+        <ClienteForm
+          key={clienteSeleccionado?.idCliente ?? "nuevo"}
+          onSubmit={handleGuardar}
+          clienteSeleccionado={clienteSeleccionado}
+          onCancel={() => setClienteSeleccionado(null)}
+          disabled={guardandoCliente}
+        />
+      </div>
 
-      <BusquedaDocumento onBuscar={handleBuscarDocumento} />
+      <BusquedaDocumento onBuscar={handleBuscarCliente} disabled={buscandoCliente} />
 
       {clienteBuscado && (
         <div className="card">
@@ -128,8 +178,10 @@ function ClientePage() {
 
       <ClienteList
         clientes={clientes}
-        onEditar={setClienteSeleccionado}
+        onEditar={handleEditarCliente}
         onEliminar={handleEliminar}
+        cargando={cargandoClientes}
+        eliminandoClienteId={eliminandoClienteId}
       />
     </div>
   );

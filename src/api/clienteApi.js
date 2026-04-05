@@ -1,74 +1,94 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:8081/clientes";
+const BASE_URL = import.meta.env.VITE_API_URL || "/api/clientes";
 
-//Obtiene todos los clientes
-export async function obtenerClientes(){
-    const response = await fetch(API_BASE_URL);
-    if(!response.ok){
-        throw new Error("Error al obtener clientes");
-    }
-    return response.json();
-}
+async function parseResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
 
-//Obtiene un cliente por ID
-export async function obtenerClientePorId(id) {
-    const response = await fetch(`${API_BASE_URL}/${id}`);
-    if(!response.ok){
-        throw new Error("Cliente no encontrado");
-    }
-    return response.json();
-}
-
-//Busca cliente por número de documento
-export async function buscarClientePorDocumento(numeroDocumento) {
-    const response = await fetch(`${API_BASE_URL}/documento/${numeroDocumento}`);
-    if(!response.ok){
-        throw new Error("Cliente no encontrado por documento");
-    }
-    return response.json();    
-}
-
-//Crear un nuevo cliente
-export async function crearCliente(cliente) {
-    const response =await fetch(API_BASE_URL,{
-        method:"POST",
-        headers:{
-            "Content-Type":"application/json",
-        },
-        body: JSON.stringify(cliente),
-        });
-    if(!response.ok){
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Error al crear cliente");
-    }
-    return response.json();
-}
-
-//Actualiza un cliente existente
-export async function actualizarCliente(id, cliente) {
-  const response = await fetch(`${API_BASE_URL}/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(cliente),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || "Error al actualizar cliente");
+  if (response.status === 204) {
+    return null;
   }
 
-  return response.json();
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return text || null;
 }
 
-//Eliminar un cliente
-export async function eliminarCliente(id) {
-    const response = await fetch(`${API_BASE_URL}/${id}`,{
-        method:"DELETE",
-        });
-    if(!response.ok){
-        throw new Error("Error al eliminar cliente");
+async function request(path = "", options = {}, defaultErrorMessage) {
+  try {
+    const response = await fetch(`${BASE_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+
+    const data = await parseResponse(response);
+
+    if (!response.ok) {
+      const apiMessage =
+        data && typeof data === "object" ? data.message || data.error : null;
+
+      throw new Error(apiMessage || defaultErrorMessage);
     }
-    
+
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === "TypeError") {
+        throw new Error(
+          "No se pudo conectar con el backend. Verifica la API y la configuración de Vite.",
+        );
+      }
+
+      throw error;
+    }
+
+    throw new Error(defaultErrorMessage);
+  }
+}
+
+export async function obtenerClientes() {
+  const data = await request("", { method: "GET" }, "Error al obtener clientes");
+  return Array.isArray(data) ? data : [];
+}
+
+export async function obtenerClientePorId(id) {
+  return request(`/${id}`, { method: "GET" }, "Cliente no encontrado");
+}
+
+export async function buscarClientePorId(id) {
+  return request(
+    `/${encodeURIComponent(id)}`,
+    { method: "GET" },
+    "Cliente no encontrado",
+  );
+}
+
+export async function crearCliente(cliente) {
+  return request(
+    "",
+    {
+      method: "POST",
+      body: JSON.stringify(cliente),
+    },
+    "Error al crear cliente",
+  );
+}
+
+export async function actualizarCliente(id, cliente) {
+  return request(
+    `/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(cliente),
+    },
+    "Error al actualizar cliente",
+  );
+}
+
+export async function eliminarCliente(id) {
+  return request(`/${id}`, { method: "DELETE" }, "Error al eliminar cliente");
 }

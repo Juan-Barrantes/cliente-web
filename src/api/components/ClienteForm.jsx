@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const clienteVacio = {
     tipoDocumento: "DNI",
@@ -12,10 +12,19 @@ const clienteVacio = {
     scoreRiesgo:"",
 };
 
-function ClienteForm ({onSubmit,clienteSeleccionado, onCancel}){
+function normalizarFecha(valor) {
+    if (!valor) {
+        return "";
+    }
+
+    return String(valor).slice(0, 10);
+}
+
+function ClienteForm ({onSubmit,clienteSeleccionado, onCancel, disabled = false}){
+    const numeroDocumentoInputRef = useRef(null);
     const [formData, setFormData] = useState(() => {
         if (!clienteSeleccionado) {
-            return clienteVacio;
+            return { ...clienteVacio };
         }
 
         return {
@@ -25,11 +34,22 @@ function ClienteForm ({onSubmit,clienteSeleccionado, onCancel}){
             apellidos: clienteSeleccionado.apellidos || "",
             correo: clienteSeleccionado.correo || "",
             telefono: clienteSeleccionado.telefono || "",
-            fechaNacimiento: clienteSeleccionado.fechaNacimiento || "",
+            fechaNacimiento: normalizarFecha(clienteSeleccionado.fechaNacimiento),
             ingresoMensual: clienteSeleccionado.ingresoMensual || "",
             scoreRiesgo: clienteSeleccionado.scoreRiesgo || "",
         };
     });
+
+    const [errorFormulario, setErrorFormulario] = useState("");
+
+    useEffect(() => {
+        if (!clienteSeleccionado || !numeroDocumentoInputRef.current) {
+            return;
+        }
+
+        numeroDocumentoInputRef.current.focus();
+        numeroDocumentoInputRef.current.select();
+    }, [clienteSeleccionado]);
 
     //Actualiza un campo del formulario
     const handleChange = (e) => {
@@ -43,9 +63,32 @@ function ClienteForm ({onSubmit,clienteSeleccionado, onCancel}){
     //Envía la data al padre
     const handleSubmit =(e) => {
         e.preventDefault();
+
+        if (!formData.numeroDocumento.trim() || !formData.nombres.trim() || !formData.apellidos.trim()) {
+            setErrorFormulario("Completa los campos obligatorios.");
+            return;
+        }
+
+        if (formData.ingresoMensual === "" || Number(formData.ingresoMensual) < 0) {
+            setErrorFormulario("El ingreso mensual debe ser un número válido.");
+            return;
+        }
+
+        if (formData.scoreRiesgo === "" || Number(formData.scoreRiesgo) < 0) {
+            setErrorFormulario("El score de riesgo debe ser un número válido.");
+            return;
+        }
+
+        setErrorFormulario("");
         
         const payload = {
             ...formData,
+            numeroDocumento: formData.numeroDocumento.trim(),
+            nombres: formData.nombres.trim(),
+            apellidos: formData.apellidos.trim(),
+            correo: formData.correo.trim(),
+            telefono: formData.telefono.trim(),
+            fechaNacimiento: normalizarFecha(formData.fechaNacimiento),
             ingresoMensual: Number(formData.ingresoMensual),
             scoreRiesgo: Number(formData.scoreRiesgo),
         };
@@ -53,17 +96,19 @@ function ClienteForm ({onSubmit,clienteSeleccionado, onCancel}){
         onSubmit(payload);
 
         if(!clienteSeleccionado){
-            setFormData(clienteVacio);
+            setFormData({ ...clienteVacio });
         }
     };
   return (
     <form className="card form" onSubmit={handleSubmit}>
       <h2>{clienteSeleccionado ? "Editar cliente" : "Registrar cliente"}</h2>
 
+      {errorFormulario && <div className="alert error">{errorFormulario}</div>}
+
       <div className="grid">
         <label>
           Tipo documento
-          <select name="tipoDocumento" value={formData.tipoDocumento} onChange={handleChange}>
+          <select name="tipoDocumento" value={formData.tipoDocumento} onChange={handleChange} disabled={disabled}>
             <option value="DNI">DNI</option>
             <option value="CE">CE</option>
             <option value="PAS">PAS</option>
@@ -74,30 +119,32 @@ function ClienteForm ({onSubmit,clienteSeleccionado, onCancel}){
           Número documento
           <input
             name="numeroDocumento"
+            ref={numeroDocumentoInputRef}
             value={formData.numeroDocumento}
             onChange={handleChange}
             required
+            disabled={disabled}
           />
         </label>
 
         <label>
           Nombres
-          <input name="nombres" value={formData.nombres} onChange={handleChange} required />
+          <input name="nombres" value={formData.nombres} onChange={handleChange} required disabled={disabled} />
         </label>
 
         <label>
           Apellidos
-          <input name="apellidos" value={formData.apellidos} onChange={handleChange} required />
+          <input name="apellidos" value={formData.apellidos} onChange={handleChange} required disabled={disabled} />
         </label>
 
         <label>
           Correo
-          <input name="correo" type="email" value={formData.correo} onChange={handleChange} />
+          <input name="correo" type="email" value={formData.correo} onChange={handleChange} disabled={disabled} />
         </label>
 
         <label>
           Teléfono
-          <input name="telefono" value={formData.telefono} onChange={handleChange} />
+          <input name="telefono" value={formData.telefono} onChange={handleChange} disabled={disabled} />
         </label>
 
         <label>
@@ -107,6 +154,7 @@ function ClienteForm ({onSubmit,clienteSeleccionado, onCancel}){
             type="date"
             value={formData.fechaNacimiento}
             onChange={handleChange}
+            disabled={disabled}
           />
         </label>
 
@@ -119,6 +167,8 @@ function ClienteForm ({onSubmit,clienteSeleccionado, onCancel}){
             value={formData.ingresoMensual}
             onChange={handleChange}
             required
+            min="0"
+            disabled={disabled}
           />
         </label>
 
@@ -130,17 +180,19 @@ function ClienteForm ({onSubmit,clienteSeleccionado, onCancel}){
             value={formData.scoreRiesgo}
             onChange={handleChange}
             required
+            min="0"
+            disabled={disabled}
           />
         </label>
       </div>
 
       <div className="actions">
-        <button type="submit">
-          {clienteSeleccionado ? "Actualizar" : "Guardar"}
+        <button type="submit" disabled={disabled}>
+          {disabled ? "Guardando..." : clienteSeleccionado ? "Actualizar" : "Guardar"}
         </button>
 
         {clienteSeleccionado && (
-          <button type="button" className="secondary" onClick={onCancel}>
+          <button type="button" className="secondary" onClick={onCancel} disabled={disabled}>
             Cancelar edición
           </button>
         )}
